@@ -28,6 +28,8 @@ Usage:
     python install_codex_skills.py --uninstall
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import re

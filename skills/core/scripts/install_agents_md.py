@@ -20,6 +20,8 @@ Usage:
     python install_agents_md.py [--target-dir PATH] [--check]
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path
