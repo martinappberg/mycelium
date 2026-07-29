@@ -54,11 +54,13 @@ For analysis, report generation, idea brainstorming, and code review, direct the
 10. Initialize `.living/` with empty `decisions.md`, `learnings.md`, `conventions.md`; create `.living/log/LOG_REGISTRY.md` (session log registry — tracks work across sessions). Create `.living/outputs/knowledge-transfers/` for cross-project transfer audit trail.
 11. **Bootstrap knowledge system**: If `~/.claude/knowledge/` does not exist, run `skills/core/scripts/init_knowledge.py` to set up the global progressive disclosure knowledge system. The script also appends the Global Knowledge Domains routing table to every `~/.claude/projects/*/memory/MEMORY.md` (idempotent — skips files where the header is already present). Generate `.living/INDEX.md` for the newly scaffolded project using `skills/core/scripts/generate_index.py --summary-heuristic`.
 12. Create `todo/` directory with `TODO_REGISTRY.md` (registry table) and `TODO_ITEM_TEMPLATE.md` (template for individual items). Copy these from the mycelium `todo/` directory.
-13. After completion: run `skills/core/scripts/validate_structure.py` to confirm everything is correct.
+13. **Install the Codex bridge** (`init_repo.py` does this automatically unless `--no-codex` is passed). Codex has no plugin system and no hooks, so parity takes two steps: `skills/core/scripts/install_codex_skills.py` generates `$CODEX_HOME/skills/mycelium-*` from `commands/*.md`, and `skills/core/scripts/install_agents_md.py` writes the protocol into the repo's `AGENTS.md` — the only enforcement Codex has — plus `.living/mycelium-root` so the repo can resolve the helper scripts. See `skills/core/references/codex-parity.md`.
+14. After completion: run `skills/core/scripts/validate_structure.py` to confirm everything is correct.
 
 **References to consult**:
 - `skills/core/references/folder-structure.md` — canonical target structure
 - `skills/core/references/environment-setup.md` — environment setup conventions
+- `skills/core/references/codex-parity.md` — what Codex gets, what it doesn't, and why
 
 ---
 

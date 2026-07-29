@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import shutil
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,6 +36,11 @@ def parse_args():
         "--restructure",
         action="store_true",
         help="Restructure an existing repo instead of creating from scratch",
+    )
+    parser.add_argument(
+        "--no-codex",
+        action="store_true",
+        help="Skip the Codex bridge (Codex skills + the AGENTS.md contract section)",
     )
     return parser.parse_args()
 
@@ -857,6 +863,43 @@ def audit_existing_structure(target_dir: Path) -> dict:
     return plan
 
 
+def install_codex_bridge(target_dir: Path):
+    """Give Codex the same skills and the same protocol Claude Code gets.
+
+    Two halves, because Codex has no plugin system and no hooks:
+
+    1. `install_codex_skills.py` generates `$CODEX_HOME/skills/mycelium-*` from
+       `commands/*.md`. This writes OUTSIDE target_dir — Codex skills are
+       per-user, the same way the Claude plugin is.
+    2. `install_agents_md.py` writes the protocol into the repo's AGENTS.md,
+       which is the only enforcement Codex has, plus `.living/mycelium-root`
+       so the repo can find the helper scripts.
+
+    Failures here are warned about, not fatal: a repo with no Codex bridge is
+    still a working mycelium repo under Claude Code.
+    """
+    scripts_dir = Path(__file__).resolve().parent
+
+    for script, args, label in (
+        ("install_codex_skills.py", [], "Codex skills"),
+        ("install_agents_md.py", ["--target-dir", str(target_dir)], "AGENTS.md contract"),
+    ):
+        path = scripts_dir / script
+        if not path.exists():
+            print(f"  Warning: {script} not found; skipped {label}")
+            continue
+        result = subprocess.run(
+            [sys.executable, str(path), *args],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            print(result.stdout.rstrip())
+        else:
+            print(f"  Warning: {label} install failed:")
+            print((result.stderr or result.stdout).rstrip())
+
+
 def ensure_gitignore(target_dir: Path):
     """Ensure the target repo ignores mycelium's transient runtime files.
 
@@ -927,6 +970,12 @@ def main():
 
     print("\nInstalling Claude Code hooks...")
     install_claude_hooks(target_dir)
+
+    if args.no_codex:
+        print("\nSkipping Codex bridge (--no-codex).")
+    else:
+        print("\nInstalling Codex bridge...")
+        install_codex_bridge(target_dir)
 
     print("\nEnsuring .gitignore covers runtime files...")
     ensure_gitignore(target_dir)

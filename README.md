@@ -55,6 +55,14 @@ claude --plugin-dir /path/to/mycelium
 
 Replace `/path/to/mycelium` with the actual path where you cloned it. This loads the plugin for a single session only.
 
+**Using Codex too?** Mycelium runs under both agents on the same `.living/` knowledge base. Codex has no plugin system, so its skills are generated from the same command files:
+
+```bash
+python3 skills/core/scripts/install_codex_skills.py
+```
+
+This writes `$CODEX_HOME/skills/mycelium-*` (default `~/.codex/skills`), giving you `mycelium-core`, `mycelium-analyze`, and the rest inside Codex. `init_repo.py` runs it for you during setup — see [Working across Claude Code and Codex](#working-across-claude-code-and-codex).
+
 ### 2. Initialize your project
 
 Open Claude Code in any project directory and say:
@@ -145,6 +153,41 @@ Mycelium ships 5 Claude Code hooks that enforce the living repo protocol automat
 | `mycelium-stop-check.sh` | Stop | Auto-finalizes session logs, blocks session end if `.living/` wasn't updated after significant work, reminds about session summary |
 
 Hooks are auto-registered by `init_repo.py` during project initialization. No manual configuration needed.
+
+## Working across Claude Code and Codex
+
+Mycelium runs under both agents against one shared `.living/` knowledge base. The workflows are the same; the machinery underneath is not, and the difference is worth knowing.
+
+| | Claude Code | Codex |
+|---|---|---|
+| Skills | plugin commands, `/mycelium:core` | generated `$CODEX_HOME/skills/mycelium-core/SKILL.md` |
+| Post-action enforcement | **hooks** — fire regardless of the model | **the model** — stated in `AGENTS.md` |
+| Session log lifecycle | opened and closed by hooks | opened and closed by the agent |
+| `.living/` locking | helper scripts | the same helper scripts |
+
+Two things follow from that table.
+
+**Enforcement is not at parity, and can't be.** Claude's hooks run whether or not the model cooperates — `mycelium-stop-check.sh` can block session end when substantial work happened without `.living/` being updated. Codex has no hook system, so there the protocol is an instruction. The bridge states it prominently in both the generated skill preamble and `AGENTS.md`, which is the strongest guarantee available; it does not pretend the two are equivalent.
+
+**Locking *is* at parity, and that's the one that matters.** The lock helpers are plain Python using `fcntl.flock`, so they serialise correctly across processes no matter which agent started them. A Codex session and a Claude chat both writing `LOG_REGISTRY.md` through `upsert_manifest_row.py` are safe against each other. A Codex session hand-editing that file with an editor tool is not — it will silently drop whichever row the other agent wrote.
+
+Install the bridge (or let `init_repo.py` do it):
+
+```bash
+# Generate the Codex skills from commands/*.md
+python3 skills/core/scripts/install_codex_skills.py
+
+# Write the protocol into a repo's AGENTS.md + record the mycelium path
+python3 skills/core/scripts/install_agents_md.py --target-dir /path/to/repo
+```
+
+The Codex skills are **generated**, not symlinked: Codex requires a `name:` field Claude commands don't carry, and the relative paths in command bodies must be absolutised because Codex has no plugin root to resolve them against. Generated copies go stale, so both installers have a `--check` mode that regenerates in memory and diffs — worth running after any `/plugin update mycelium`:
+
+```bash
+python3 skills/core/scripts/install_codex_skills.py --check   # exit 1 if stale
+```
+
+Full detail: `skills/core/references/codex-parity.md`.
 
 ## Progressive Disclosure Knowledge System
 
