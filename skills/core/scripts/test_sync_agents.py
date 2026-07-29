@@ -66,6 +66,67 @@ def test_report_install_survives_non_repo(tmp_path: Path, capsys) -> None:
     assert "cannot tell which version" in capsys.readouterr().out
 
 
+def _repo(path: Path) -> Path:
+    """A git repo with one commit."""
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True)
+    for k, v in (("user.email", "t@t"), ("user.name", "t")):
+        subprocess.run(["git", "-C", str(path), "config", k, v], check=True)
+    (path / "f").write_text("x")
+    subprocess.run(["git", "-C", str(path), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(path), "commit", "-qm", "c"], check=True)
+    return path
+
+
+def test_no_upstream_is_flagged(tmp_path: Path, capsys) -> None:
+    sa.report_install(_repo(tmp_path / "r"))
+    assert "no upstream branch" in capsys.readouterr().out
+
+
+def test_ahead_of_upstream_is_reported_not_called_up_to_date(tmp_path: Path, capsys) -> None:
+    """The bug this replaced: 'behind by 0' printed a clean bill of health
+    while HEAD was two commits ahead and unpushed."""
+    origin = _repo(tmp_path / "origin")
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True)
+    (clone / "g").write_text("y")
+    subprocess.run(["git", "-C", str(clone), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(clone), "commit", "-qm", "ahead"], check=True)
+
+    sa.report_install(clone)
+    out = capsys.readouterr().out
+    assert "1 commit(s) ahead" in out
+    assert "up to date" not in out
+
+
+def test_stale_tracking_ref_is_flagged(tmp_path: Path, capsys) -> None:
+    """A tracking ref whose branch no longer exists on the remote must not
+    read as 'up to date' just because nothing is fetchable."""
+    origin = _repo(tmp_path / "origin")
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True)
+    # Branch disappears from the remote; the local tracking ref survives.
+    subprocess.run(["git", "-C", str(origin), "branch", "-m", "main", "gone"], check=True)
+
+    sa.report_install(clone)
+    out = capsys.readouterr().out
+    assert "does not exist on the remote" in out
+    assert "up to date" not in out
+
+
+def test_behind_upstream_is_flagged(tmp_path: Path, capsys) -> None:
+    origin = _repo(tmp_path / "origin")
+    clone = tmp_path / "clone"
+    subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True)
+    (origin / "g").write_text("y")
+    subprocess.run(["git", "-C", str(origin), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(origin), "commit", "-qm", "newer"], check=True)
+    subprocess.run(["git", "-C", str(clone), "fetch", "-q"], check=True)
+
+    sa.report_install(clone)
+    assert "1 commit(s) behind" in capsys.readouterr().out
+
+
 # --- claude plugin drift ---------------------------------------------------
 
 

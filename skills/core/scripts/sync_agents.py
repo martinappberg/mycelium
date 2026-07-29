@@ -64,12 +64,29 @@ def report_install(root: Path) -> str:
     print(f"{OK}{branch} @ {head[:12]}{'  (uncommitted changes)' if dirty else ''}")
 
     upstream = git(root, "rev-parse", "--abbrev-ref", "@{upstream}")
-    if upstream:
-        behind = git(root, "rev-list", "--count", f"HEAD..{upstream}")
-        if behind and behind != "0":
-            print(f"{WARN}{behind} commit(s) behind {upstream} — run: git -C {root} pull")
-        else:
-            print(f"{OK}up to date with {upstream}")
+    if not upstream:
+        print(f"{WARN}no upstream branch — this checkout has no source to pull from")
+        return head
+
+    # A tracking ref can exist locally while the branch no longer exists (or
+    # never existed) on the remote — e.g. after a clone whose origin URL was
+    # repointed. "Behind by 0" then reads as "up to date", which is wrong and
+    # exactly the kind of false all-clear this script exists to prevent.
+    remote = upstream.split("/", 1)[0]
+    if remote != "." and not git(root, "ls-remote", "--heads", remote, upstream.split("/", 1)[1]):
+        print(f"{WARN}{upstream} does not exist on the remote — the local ref is stale")
+        return head
+
+    counts = git(root, "rev-list", "--left-right", "--count", f"HEAD...{upstream}")
+    ahead, behind = (counts.split() + ["0", "0"])[:2] if counts else ("0", "0")
+    if behind != "0" and ahead != "0":
+        print(f"{WARN}diverged from {upstream}: {ahead} ahead, {behind} behind")
+    elif behind != "0":
+        print(f"{WARN}{behind} commit(s) behind {upstream} — run: git -C {root} pull")
+    elif ahead != "0":
+        print(f"{OK}{ahead} commit(s) ahead of {upstream} (unpushed)")
+    else:
+        print(f"{OK}up to date with {upstream}")
     return head
 
 
