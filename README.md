@@ -181,10 +181,18 @@ python3 skills/core/scripts/install_codex_skills.py
 python3 skills/core/scripts/install_agents_md.py --target-dir /path/to/repo
 ```
 
-The Codex skills are **generated**, not symlinked: Codex requires a `name:` field Claude commands don't carry, and the relative paths in command bodies must be absolutised because Codex has no plugin root to resolve them against. Generated copies go stale, so both installers have a `--check` mode that regenerates in memory and diffs — worth running after any `/plugin update mycelium`:
+The Codex skills are **generated**, not symlinked: Codex requires a `name:` field Claude commands don't carry, and the relative paths in command bodies must be absolutised because Codex has no plugin root to resolve them against.
+
+Generated copies go stale, and so does the Claude plugin — it is pinned to a commit at install time, while the hooks run from the checkout and update the moment you pull. Nothing warns you when they diverge, so there is one command that checks all four moving parts (checkout, plugin cache, Codex skills, repo wiring):
 
 ```bash
-python3 skills/core/scripts/install_codex_skills.py --check   # exit 1 if stale
+python3 skills/core/scripts/sync_agents.py --check --repo /path/to/repo
+```
+
+Without `--check` it repairs the two it can. Updating the Claude plugin is the one step it can only tell you about:
+
+```bash
+claude plugin update mycelium@mycelium   # then restart
 ```
 
 Full detail: `skills/core/references/codex-parity.md`.

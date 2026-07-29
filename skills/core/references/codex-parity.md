@@ -58,6 +58,22 @@ python3 skills/core/scripts/install_agents_md.py --target-dir /path/to/repo
 
 `init_repo.py` runs both as part of a normal init. Pass `--no-codex` to skip.
 
+## Checking all of it at once
+
+An installed mycelium is four things that update independently — this checkout
+(where the **hooks** run from), the Claude plugin cache (where the **skills**
+load from, pinned at install time), the generated Codex skills, and the per-repo
+`AGENTS.md` wiring. Nothing warns when they disagree, and the failure is silent:
+hooks can run several commits ahead of the skills the agent is actually reading.
+
+```bash
+python3 skills/core/scripts/sync_agents.py --check --repo /path/to/repo
+```
+
+prints all four and flags the mismatches. Without `--check` it fixes the two it
+can (Codex skills, repo wiring). The Claude plugin it can't — that needs
+`claude plugin update mycelium@mycelium` and a restart, which it tells you.
+
 ## Keeping them in sync
 
 The Codex skills are **generated**, not symlinked — the frontmatter needs a
